@@ -82,16 +82,20 @@ def load_notes_from_file(path):
 # Matching logic
 # -----------------------
 
-def match_section(section, args):
-    s = section.lower()
+# Words in the filename will be included in the search text for each note
+# section.
+def match_section(note, args):
 
-    if args.all and not all(w.lower() in s for w in args.all):
+    filename = os.path.basename(note.file)
+    search_text = f"{filename} {note.content}".lower()
+
+    if args.all and not all(w.lower() in search_text for w in args.all):
         return False
 
-    if args.any and not any(w.lower() in s for w in args.any):
+    if args.any and not any(w.lower() in search_text for w in args.any):
         return False
 
-    if args.not_words and any(w.lower() in s for w in args.not_words):
+    if args.not_words and any(w.lower() in search_text for w in args.not_words):
         return False
 
     if args.re and not re.search(args.re, section, re.MULTILINE | re.DOTALL):
@@ -114,7 +118,7 @@ def cmd_search(args):
             continue
 
         for note in notes:
-            if match_section(note.content, args):
+            if match_section(note, args):
                 results.append(note)
 
     if args.fzf:
