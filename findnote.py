@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 
+from config import load_config
 from formatting import format_note
 from formatting import render_note
 from formatting import strip_code_fence
@@ -111,15 +112,16 @@ def match_section(note, args):
 def cmd_search(args):
     results = []
 
-    for file in iter_files(args.path, args.ext, args.exclude):
-        try:
-            notes = load_notes_from_file(file)
-        except Exception:
-            continue
+    for base_path in args.search_paths:
+        for file in iter_files(base_path, args.ext, args.exclude):
+            try:
+                notes = load_notes_from_file(file)
+            except Exception:
+                continue
 
-        for note in notes:
-            if match_section(note, args):
-                results.append(note)
+            for note in notes:
+                if match_section(note, args):
+                    results.append(note)
 
     if args.fzf:
         run_fzf(results, print_only=args.print)
@@ -130,15 +132,16 @@ def cmd_search(args):
 
 
 def cmd_list(args):
-    for file in iter_files(args.path, args.ext, args.exclude):
-        try:
-            sections = load_notes_from_file(file)
-        except Exception:
-            continue
+    for base_path in args.search_paths:
+        for file in iter_files(base_path, args.ext, args.exclude):
+            try:
+                sections = load_notes_from_file(file)
+            except Exception:
+                continue
 
-        for i, (section, line) in enumerate(sections):
-            preview = section.strip().split("\n")[0][:80]
-            print(f"{file} [{i}] line {line} :: {preview}")
+            for i, (section, line) in enumerate(sections):
+                preview = section.strip().split("\n")[0][:80]
+                print(f"{file} [{i}] line {line} :: {preview}")
 
 
 def cmd_view(args):
@@ -164,11 +167,12 @@ def cmd_stats(args):
     total_sections = 0
     total_lines = 0
 
-    for file in iter_files(args.path, args.ext, args.exclude):
-        try:
-            sections = load_notes_from_file(file)
-        except Exception:
-            continue
+    for base_path in args.search_paths:
+        for file in iter_files(base_path, args.ext, args.exclude):
+            try:
+                sections = load_notes_from_file(file)
+            except Exception:
+                continue
 
         total_sections += len(sections)
         total_lines += sum(s.count("\n") for s, _ in sections)
@@ -229,7 +233,9 @@ def run_fzf(notes, print_only=False):
 
         clean = strip_code_fence(n.content)
         preview = clean.split("\n")[0][:80]
-        encoded = n.content.replace("\n", SEP)
+
+        safe = n.content.replace("\t", "   ")
+        encoded = safe.replace("\n", SEP)
 
         # preview | file | line | content
         entries.append(f"{preview}\t{n.file}\t{n.line}\t{encoded}")
@@ -280,7 +286,7 @@ def main():
 
     # search
     p_search = subparsers.add_parser("search")
-    p_search.add_argument("path")
+    p_search.add_argument("--path", nargs="+")
     p_search.add_argument("--all", nargs="+")
     p_search.add_argument("--any", nargs="+")
     p_search.add_argument("--not-words", nargs="+")
@@ -313,6 +319,16 @@ def main():
     p_stats.set_defaults(func=cmd_stats)
 
     args = parser.parse_args()
+
+    config = load_config()
+
+    if args.path:
+        args.search_paths = args.path
+    else:
+        args.search_paths = config["search_paths"]
+    
+    args.width = config.get("width", 80);
+
     args.func(args)
 
 
