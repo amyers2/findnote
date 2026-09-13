@@ -62,11 +62,18 @@ def split_sections_with_lines(text):
 
 
 def get_note_title(section, file):
-    match = re.search(r'^##\s+(.+?)\s*$', section, re.MULTILINE)
-
+    # Prefer a ## heading at the beginning of the section.
+    match = re.match(r'^\s*##\s+(.+?)\s*$', section, re.MULTILINE)
     if match:
         return match.group(1).strip()
 
+    # Otherwise use the first non-empty line.
+    for line in section.splitlines():
+        line = line.strip()
+        if line:
+            return line
+
+    # Empty section: fall back to filename.
     return os.path.basename(file)
 
 
@@ -111,7 +118,7 @@ def match_section(note, args):
     if args.not_words and any(w.lower() in search_text for w in args.not_words):
         return False
 
-    if args.re and not re.search(args.re, section, re.MULTILINE | re.DOTALL):
+    if args.re and not re.search(args.re, note.content, re.MULTILINE | re.DOTALL):
         return False
 
     return True
@@ -186,8 +193,8 @@ def cmd_stats(args):
             except Exception:
                 continue
 
-        total_sections += len(sections)
-        total_lines += sum(s.count("\n") for s, _ in sections)
+            total_sections += len(sections)
+            total_lines += sum(s.count("\n") for s, _ in sections)
 
     print(f"Sections: {total_sections}")
     print(f"Total lines (approx): {total_lines}")
