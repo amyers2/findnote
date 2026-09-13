@@ -77,7 +77,7 @@ def get_note_title(section, file):
     return os.path.basename(file)
 
 
-def load_notes_from_file(path):
+def load_notes_from_file(path, collection_name):
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
@@ -88,6 +88,7 @@ def load_notes_from_file(path):
         content = section.strip()
 
         notes.append(Note(
+            collection=collection_name,
             file=path,
             index=index,
             line=line,
@@ -141,9 +142,8 @@ def get_search_paths(config, collection_names=None):
     paths = []
 
     for collection_name in collection_names:
-        paths.extend(
-            get_collection_paths(config, collection_name)
-        )
+        for path in get_collection_paths(config, collection_name):
+            paths.append((collection_name, path))
 
     return paths
 
@@ -181,10 +181,10 @@ def match_section(note, args):
 def cmd_search(args):
     results = []
 
-    for base_path in args.search_paths:
+    for collection_name, base_path in args.search_paths:
         for file in iter_files(base_path, args.ext, args.exclude):
             try:
-                notes = load_notes_from_file(file)
+                notes = load_notes_from_file(file, collection_name)
             except Exception:
                 continue
 
@@ -201,16 +201,16 @@ def cmd_search(args):
 
 
 def cmd_list(args):
-    for base_path in args.search_paths:
+    for collection_name, base_path in args.search_paths:
         for file in iter_files(base_path, args.ext, args.exclude):
             try:
-                sections = load_notes_from_file(file)
+                sections = load_notes_from_file(file, collection_name)
             except Exception:
                 continue
 
-            for i, (section, line) in enumerate(sections):
-                preview = section.strip().split("\n")[0][:80]
-                print(f"{file} [{i}] line {line} :: {preview}")
+            for i, note in enumerate(sections):
+                preview = note.content.strip().split("\n")[0][:80]
+                print(f"{file} [{i}] line {note.line} :: {preview}")
 
 
 def cmd_view(args):
@@ -218,33 +218,34 @@ def cmd_view(args):
         print("view requires a single file", file=sys.stderr)
         sys.exit(1)
 
-    sections = load_notes_from_file(args.file)
+    sections = load_notes_from_file(args.file, None)
 
     if args.index < 0 or args.index >= len(sections):
         print("Invalid section index", file=sys.stderr)
         sys.exit(1)
 
-    section, line = sections[args.index]
-    print(f"{args.file} [{args.index}] line {line}\n")
-    print(section.strip())
+    note = sections[args.index]
+
+    print(f"{args.file} [{args.index}] line {note.line}\n")
+    print(note.content)
 
     if args.open:
-        open_in_editor(args.file, line)
+        open_in_editor(args.file, note.line)
 
 
 def cmd_stats(args):
     total_sections = 0
     total_lines = 0
 
-    for base_path in args.search_paths:
+    for collection_name, base_path in args.search_paths:
         for file in iter_files(base_path, args.ext, args.exclude):
             try:
-                sections = load_notes_from_file(file)
+                sections = load_notes_from_file(file, collection_name)
             except Exception:
                 continue
 
             total_sections += len(sections)
-            total_lines += sum(s.count("\n") for s, _ in sections)
+            total_lines += sum(note.content.count("\n") for note in sections)
 
     print(f"Sections: {total_sections}")
     print(f"Total lines (approx): {total_lines}")
@@ -369,7 +370,7 @@ def main():
 
     # list
     p_list = subparsers.add_parser("list")
-    p_list.add_argument("path")
+    p_list.add_argument("--collection", nargs="+")
     p_list.add_argument("--ext", nargs="+")
     p_list.add_argument("--exclude", nargs="+")
     p_list.set_defaults(func=cmd_list)
@@ -383,7 +384,7 @@ def main():
 
     # stats
     p_stats = subparsers.add_parser("stats")
-    p_stats.add_argument("path")
+    p_stats.add_argument("--collection", nargs="+")
     p_stats.add_argument("--ext", nargs="+")
     p_stats.add_argument("--exclude", nargs="+")
     p_stats.set_defaults(func=cmd_stats)
@@ -392,9 +393,9 @@ def main():
 
     config = load_config()
 
-    if args.path:
-        args.search_paths = args.path
-    else:
+    if hasattr(args, "path") and args.path:
+        args.search_paths = [(None, path) for path in args.path]
+    elif hasattr(args, "collection"):
         collection_names = args.collection
         args.search_paths = get_search_paths(config, collection_names)
     
