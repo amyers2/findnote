@@ -107,7 +107,7 @@ def get_collection_paths(config, collection_name):
         raise ValueError(
             f"Unknown collection '{collection_name}'. "
             f"Available collections: {available}"
-)
+        )
 
     collection = collections[collection_name]
     root = os.path.abspath(collection["path"])
@@ -128,6 +128,22 @@ def get_collection_paths(config, collection_name):
             )
 
         paths.append(path)
+
+    return paths
+
+
+def get_search_paths(config, collection_names=None):
+    collections = config.get("collections", {})
+
+    if collection_names is None:
+        collection_names = collections.keys()
+
+    paths = []
+
+    for collection_name in collection_names:
+        paths.extend(
+            get_collection_paths(config, collection_name)
+        )
 
     return paths
 
@@ -379,15 +395,8 @@ def main():
     if args.path:
         args.search_paths = args.path
     else:
-        collection_names = args.collection or \
-                           config.get("collections", {}).keys()
-
-        args.search_paths = []
-
-        for collection_name in collection_names:
-            args.search_paths.extend(
-                get_collection_paths(config, collection_name)
-            )
+        collection_names = args.collection
+        args.search_paths = get_search_paths(config, collection_names)
     
     args.width = config.get("width", 80);
 
