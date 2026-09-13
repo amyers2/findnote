@@ -61,6 +61,15 @@ def split_sections_with_lines(text):
     return sections
 
 
+def get_note_title(section, file):
+    match = re.search(r'^##\s+(.+?)\s*$', section, re.MULTILINE)
+
+    if match:
+        return match.group(1).strip()
+
+    return os.path.basename(file)
+
+
 def load_notes_from_file(path):
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
@@ -68,12 +77,15 @@ def load_notes_from_file(path):
     sections = split_sections_with_lines(text)
 
     notes = []
-    for i, (section, line) in enumerate(sections):
+    for index, (section, line) in enumerate(sections):
+        content = section.strip()
+
         notes.append(Note(
             file=path,
-            index=i,
+            index=index,
             line=line,
-            content=section.strip()
+            title=get_note_title(content, path),
+            content=content
         ))
 
     return notes
