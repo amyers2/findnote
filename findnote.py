@@ -98,6 +98,40 @@ def load_notes_from_file(path):
     return notes
 
 
+def get_collection_paths(config, collection_name):
+    collections = config.get("collections", {})
+
+    if collection_name not in collections:
+        available = ", ".join(collections)
+
+        raise ValueError(
+            f"Unknown collection '{collection_name}'. "
+            f"Available collections: {available}"
+)
+
+    collection = collections[collection_name]
+    root = os.path.abspath(collection["path"])
+
+    # No "include" means the entire collection.
+    if "include" not in collection:
+        return [root]
+
+    paths = []
+
+    for relative_path in collection["include"]:
+        path = os.path.abspath(os.path.join(root, relative_path))
+
+        # Don't allow an include path to escape the collection root.
+        if os.path.commonpath([root, path]) != root:
+            raise ValueError(
+                f"Collection path escapes root: {relative_path}"
+            )
+
+        paths.append(path)
+
+    return paths
+
+
 # -----------------------
 # Matching logic
 # -----------------------
@@ -306,6 +340,7 @@ def main():
     # search
     p_search = subparsers.add_parser("search")
     p_search.add_argument("--path", nargs="+")
+    p_search.add_argument("--collection", nargs="+")
     p_search.add_argument("--all", nargs="+")
     p_search.add_argument("--any", nargs="+")
     p_search.add_argument("--not-words", nargs="+")
@@ -344,7 +379,15 @@ def main():
     if args.path:
         args.search_paths = args.path
     else:
-        args.search_paths = config["search_paths"]
+        collection_names = args.collection or \
+                           config.get("collections", {}).keys()
+
+        args.search_paths = []
+
+        for collection_name in collection_names:
+            args.search_paths.extend(
+                get_collection_paths(config, collection_name)
+            )
     
     args.width = config.get("width", 80);
 
@@ -352,4 +395,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as e:
+        print(f"Error: {e}")
+        raise SystemExit(1)
