@@ -218,7 +218,7 @@ def cmd_view(args):
         print("view requires a single file", file=sys.stderr)
         sys.exit(1)
 
-    sections = load_notes_from_file(args.file, None)
+    sections = load_notes_from_file(args.file, "")
 
     if args.index < 0 or args.index >= len(sections):
         print("Invalid section index", file=sys.stderr)
