@@ -339,7 +339,7 @@ def run_fzf(notes, print_only=False):
     content = parts[3].replace(SEP, "\n")
 
     if print_only:
-        note = Note(file=file, index=0, line=line, content=content)
+        note = Note(collection="", file=file, index=0, line=line, title="", content=content)
         print()
         render_note(note)
     else:
