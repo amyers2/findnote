@@ -2,176 +2,20 @@
 
 import argparse
 import os
-import re
-import subprocess
 import sys
 
 from config import load_config
-from formatting import format_note
-from formatting import render_note
-from formatting import strip_code_fence
 from note import Note
-
-
-SECTION_PATTERN = r'\n---\n'
-
-
-# -----------------------
-# File handling
-# -----------------------
-
-def iter_files(path, exts=None, exclude=None):
-    if os.path.isfile(path):
-        yield path
-        return
-
-    for root, _, files in os.walk(path):
-        for name in files:
-            full = os.path.join(root, name)
-
-            if exclude and any(e in full for e in exclude):
-                continue
-
-            if exts and not any(name.endswith(e) for e in exts):
-                continue
-
-            yield full
-
-
-# -----------------------
-# Section parsing
-# -----------------------
-
-def split_sections_with_lines(text):
-    sections = []
-    start = 0
-    line_num = 1
-
-    for match in re.finditer(SECTION_PATTERN, text):
-        end = match.start()
-        section = text[start:end]
-        sections.append((section, line_num))
-
-        line_num += section.count("\n") + match.group().count("\n")
-        start = match.end()
-
-    section = text[start:]
-    sections.append((section, line_num))
-
-    return sections
-
-
-def get_note_title(section, file):
-    # Prefer a ## heading at the beginning of the section.
-    match = re.match(r'^\s*##\s+(.+?)\s*$', section, re.MULTILINE)
-    if match:
-        return match.group(1).strip()
-
-    # Otherwise use the first non-empty line.
-    for line in section.splitlines():
-        line = line.strip()
-        if line:
-            return line
-
-    # Empty section: fall back to filename.
-    return os.path.basename(file)
-
-
-def load_notes_from_file(path, collection_name):
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
-
-    sections = split_sections_with_lines(text)
-
-    notes = []
-    for index, (section, line) in enumerate(sections):
-        content = section.strip()
-
-        notes.append(Note(
-            collection=collection_name,
-            file=path,
-            index=index,
-            line=line,
-            title=get_note_title(content, path),
-            content=content
-        ))
-
-    return notes
-
-
-def get_collection_paths(config, collection_name):
-    collections = config.get("collections", {})
-
-    if collection_name not in collections:
-        available = ", ".join(collections)
-
-        raise ValueError(
-            f"Unknown collection '{collection_name}'. "
-            f"Available collections: {available}"
-        )
-
-    collection = collections[collection_name]
-    root = os.path.abspath(collection["path"])
-
-    # No "include" means the entire collection.
-    if "include" not in collection:
-        return [root]
-
-    paths = []
-
-    for relative_path in collection["include"]:
-        path = os.path.abspath(os.path.join(root, relative_path))
-
-        # Don't allow an include path to escape the collection root.
-        if os.path.commonpath([root, path]) != root:
-            raise ValueError(
-                f"Collection path escapes root: {relative_path}"
-            )
-
-        paths.append(path)
-
-    return paths
-
-
-def get_search_paths(config, collection_names=None):
-    collections = config.get("collections", {})
-
-    if collection_names is None:
-        collection_names = collections.keys()
-
-    paths = []
-
-    for collection_name in collection_names:
-        for path in get_collection_paths(config, collection_name):
-            paths.append((collection_name, path))
-
-    return paths
-
-
-# -----------------------
-# Matching logic
-# -----------------------
-
-# Words in the filename will be included in the search text for each note
-# section.
-def match_section(note, args):
-
-    filename = os.path.basename(note.file)
-    search_text = f"{filename} {note.content}".lower()
-
-    if args.all and not all(w.lower() in search_text for w in args.all):
-        return False
-
-    if args.any and not any(w.lower() in search_text for w in args.any):
-        return False
-
-    if args.not_words and any(w.lower() in search_text for w in args.not_words):
-        return False
-
-    if args.re and not re.search(args.re, note.content, re.MULTILINE | re.DOTALL):
-        return False
-
-    return True
+from formatting import (
+    render_note,
+    strip_code_fence
+)
+from search import (
+    iter_files,
+    load_notes_from_file,
+    get_search_paths,
+    search_notes
+)
 
 
 # -----------------------
@@ -179,18 +23,15 @@ def match_section(note, args):
 # -----------------------
 
 def cmd_search(args):
-    results = []
-
-    for collection_name, base_path in args.search_paths:
-        for file in iter_files(base_path, args.ext, args.exclude):
-            try:
-                notes = load_notes_from_file(file, collection_name)
-            except Exception:
-                continue
-
-            for note in notes:
-                if match_section(note, args):
-                    results.append(note)
+    results = search_notes(
+        args.search_paths,
+        ext=args.ext,
+        exclude=args.exclude,
+        all_words=args.all,
+        any_words=args.any,
+        not_words=args.not_words,
+        regex=args.re
+    )
 
     if args.fzf:
         run_fzf(results, print_only=args.print)
@@ -339,7 +180,9 @@ def run_fzf(notes, print_only=False):
     content = parts[3].replace(SEP, "\n")
 
     if print_only:
-        note = Note(collection="", file=file, index=0, line=line, title="", content=content)
+        note = Note(
+            collection="", file=file, index=0,
+            line=line, title="", content=content)
         print()
         render_note(note)
     else:
@@ -363,9 +206,15 @@ def main():
     p_search.add_argument("--not-words", nargs="+")
     p_search.add_argument("--re")
     p_search.add_argument("--fzf", action="store_true")
-    p_search.add_argument("--print", action="store_true", help="print instead of opening from fzf")
-    p_search.add_argument("--ext", nargs="+", help="e.g. .txt .md")
-    p_search.add_argument("--exclude", nargs="+", help="skip paths containing these")
+    p_search.add_argument("--print",
+                          action="store_true",
+                          help="print instead of opening from fzf")
+    p_search.add_argument("--ext",
+                          nargs="+",
+                          help="e.g. .txt .md")
+    p_search.add_argument("--exclude",
+                          nargs="+",
+                          help="skip paths containing these")
     p_search.set_defaults(func=cmd_search)
 
     # list
@@ -398,8 +247,8 @@ def main():
     elif hasattr(args, "collection"):
         collection_names = args.collection
         args.search_paths = get_search_paths(config, collection_names)
-    
-    args.width = config.get("width", 80);
+
+    args.width = config.get("width", 80)
 
     args.func(args)
 

@@ -6,7 +6,8 @@ def strip_code_fence(text):
     lines = text.strip().splitlines()
 
     if len(lines) >= 2:
-        if lines[0].strip().startswith("```") and lines[-1].strip().startswith("```"):
+        if lines[0].strip().startswith("```") and \
+           lines[-1].strip().startswith("```"):
             return "\n".join(lines[1:-1]).strip()
 
     return text
