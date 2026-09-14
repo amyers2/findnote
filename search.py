@@ -133,25 +133,27 @@ def get_search_paths(config, collection_names=None):
 
 # Words in the filename will be included in the search text for each note
 # section.
-def match_section(note, args):
+def match_section(note,
+                  all_words=None, any_words=None,
+                  not_words=None, regex=None):
 
     filename = os.path.basename(note.file)
     search_text = f"{filename} {note.content}".lower()
 
-    if args.all and \
-       not all(w.lower() in search_text for w in args.all):
+    if all_words and \
+       not all(w.lower() in search_text for w in all_words):
         return False
 
-    if args.any and \
-       not any(w.lower() in search_text for w in args.any):
+    if any_words and \
+       not any(w.lower() in search_text for w in any_words):
         return False
 
-    if args.not_words and \
-       any(w.lower() in search_text for w in args.not_words):
+    if not_words and \
+       any(w.lower() in search_text for w in not_words):
         return False
 
-    if args.re and \
-       not re.search(args.re, note.content, re.MULTILINE | re.DOTALL):
+    if regex and \
+       not re.search(regex, note.content, re.MULTILINE | re.DOTALL):
         return False
 
     return True
@@ -171,17 +173,13 @@ def search_notes(search_paths, ext=None, exclude=None,
                 continue
 
             for note in notes:
-                # Build an args-like object for the existing matcher.
-                class Args:
-                    pass
-
-                args = Args()
-                args.all = all_words
-                args.any = any_words
-                args.not_words = not_words
-                args.re = regex
-
-                if match_section(note, args):
+                if match_section(
+                    note,
+                    all_words=all_words,
+                    any_words=any_words,
+                    not_words=not_words,
+                    regex=regex
+                ):
                     results.append(note)
 
     return results
