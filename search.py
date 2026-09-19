@@ -185,11 +185,14 @@ def search_notes(search_paths, ext=None, exclude=None,
     return results
 
 
-def notes_to_dicts(notes):
+def notes_to_dicts(notes, config):
     return [
         {
             "collection": note.collection,
-            "file": note.file,
+            "file": os.path.relpath(
+                note.file,
+                config["collections"][note.collection]["path"],
+            ),
             "index": note.index,
             "line": note.line,
             "title": note.title,
