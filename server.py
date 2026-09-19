@@ -1,35 +1,64 @@
 #!/usr/bin/env python3
 
+import json
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from config import load_config
-from search import search_notes
+from search import get_search_paths, search_notes
+
+
+def notes_to_dicts(notes):
+    return [
+        {
+            "collection": note.collection,
+            "file": note.file,
+            "index": note.index,
+            "line": note.line,
+            "title": note.title,
+        }
+        for note in notes
+    ]
 
 
 class RequestHandler(BaseHTTPRequestHandler):
     config = None
 
+    def handle_health(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def handle_search(self, query):
+        results = search_notes(
+            get_search_paths(self.config),
+            all_words=[query],
+        )
+
+        data = notes_to_dicts(results)
+        response = json.dumps(data)
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response.encode())))
+        self.end_headers()
+
+        self.wfile.write(response.encode())
+
     def do_GET(self):
         parsed = urlparse(self.path)
 
         if parsed.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"OK")
+            self.handle_health()
             return
 
         if parsed.path == "/search":
             params = parse_qs(parsed.query)
             query = params.get("q", [""])[0]
 
-            print(f"Search query: {query}")
-
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-            self.wfile.write(query.encode())
+            self.handle_search(query)
             return
 
         self.send_response(404)
