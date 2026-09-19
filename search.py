@@ -183,3 +183,16 @@ def search_notes(search_paths, ext=None, exclude=None,
                     results.append(note)
 
     return results
+
+
+def notes_to_dicts(notes):
+    return [
+        {
+            "collection": note.collection,
+            "file": note.file,
+            "index": note.index,
+            "line": note.line,
+            "title": note.title,
+        }
+        for note in notes
+    ]

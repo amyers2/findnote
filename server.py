@@ -6,24 +6,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from config import load_config
-from search import get_search_paths, search_notes
-
-
-def notes_to_dicts(notes):
-    return [
-        {
-            "collection": note.collection,
-            "file": note.file,
-            "index": note.index,
-            "line": note.line,
-            "title": note.title,
-        }
-        for note in notes
-    ]
+from search import (
+    get_search_paths,
+    notes_to_dicts,
+    search_notes
+)
 
 
 class RequestHandler(BaseHTTPRequestHandler):
     config = None
+
 
     def handle_health(self):
         self.send_response(200)
@@ -31,13 +23,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"OK")
 
-    def handle_search(self, query):
-        results = search_notes(
-            get_search_paths(self.config),
-            all_words=[query],
-        )
 
-        data = notes_to_dicts(results)
+    def send_json(self, data):
         response = json.dumps(data)
 
         self.send_response(200)
@@ -47,6 +34,27 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         self.wfile.write(response.encode())
 
+
+    def handle_search(self, query):
+        if not query:
+            self.send_json([])
+            return
+
+        results = search_notes(
+            get_search_paths(self.config),
+            all_words=[query],
+        )
+
+        data = notes_to_dicts(results)
+        
+        self.send_json(data)
+
+
+    def get_query(self, parsed):
+        params = parse_qs(parsed.query)
+        return params.get("q", [""])[0]
+
+
     def do_GET(self):
         parsed = urlparse(self.path)
 
@@ -55,9 +63,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/search":
-            params = parse_qs(parsed.query)
-            query = params.get("q", [""])[0]
-
+            query = self.get_query(parsed)
             self.handle_search(query)
             return
 
