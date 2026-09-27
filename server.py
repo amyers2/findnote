@@ -47,7 +47,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def handle_search(
             self, query, all_words=None, any_words=None,
-            not_words=None, regex=None, collections=None):
+            not_words=None, regex=None, collections=None,
+            match_case=False, whole_word=False):
 
         if all_words is None:
             all_words = []
@@ -60,7 +61,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             all_words=all_words,
             any_words=any_words,
             not_words=not_words,
-            regex=regex
+            regex=regex,
+            match_case=match_case,
+            whole_word=whole_word
         )
 
         data = notes_to_dicts(results, self.config)
@@ -88,11 +91,24 @@ class RequestHandler(BaseHTTPRequestHandler):
             any_words = params.get("any", [])
             not_words = params.get("not", [])
             regex = params.get("re", [None])[0]
+            match_case = params.get(
+                "match_case",
+                ["false"])[0].lower() == "true"
+            whole_word = params.get(
+                "whole_word",
+                ["false"])[0].lower() == "true"
 
-            collections = params.get("collection", [])
+            collections = params.get("collection")
             try:
                 self.handle_search(
-                    query, all_words, any_words, not_words, regex, collections)
+                    query,
+                    all_words,
+                    any_words,
+                    not_words,
+                    regex,
+                    collections,
+                    match_case,
+                    whole_word)
             except ValueError as e:
                 self.send_json({"error": str(e)}, status=400)
             return

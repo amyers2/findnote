@@ -131,29 +131,57 @@ def get_search_paths(config, collection_names=None):
     return paths
 
 
+def matches_word(word, search_text, match_case=False, whole_word=False):
+    if not match_case:
+        word = word.lower()
+        search_text = search_text.lower()
+
+    if whole_word:
+        return re.search(
+            rf"\b{re.escape(word)}\b",
+            search_text,
+        ) is not None
+
+    return word in search_text
+
+
 # Words in the filename will be included in the search text for each note
 # section.
 def match_section(note,
                   all_words=None, any_words=None,
-                  not_words=None, regex=None):
+                  not_words=None, regex=None,
+                  match_case=False, whole_word=False):
 
     filename = os.path.basename(note.file)
-    search_text = f"{filename} {note.content}".lower()
+    search_text = f"{filename} {note.content}"
 
     if all_words and \
-       not all(w.lower() in search_text for w in all_words):
+       not all(
+           matches_word(w, search_text, match_case, whole_word)
+           for w in all_words
+       ):
         return False
 
     if any_words and \
-       not any(w.lower() in search_text for w in any_words):
+       not any(
+           matches_word(w, search_text, match_case, whole_word)
+           for w in any_words
+       ):
         return False
 
     if not_words and \
-       any(w.lower() in search_text for w in not_words):
+       any(
+           matches_word(w, search_text, match_case, whole_word)
+           for w in not_words
+       ):
         return False
 
-    if regex and \
-       not re.search(regex, note.content, re.MULTILINE | re.DOTALL):
+    if regex \
+       and not re.search(
+          regex,
+          note.content,
+          re.IGNORECASE | re.MULTILINE | re.DOTALL
+       ):
         return False
 
     return True
@@ -161,7 +189,8 @@ def match_section(note,
 
 def search_notes(search_paths, ext=None, exclude=None,
                  all_words=None, any_words=None,
-                 not_words=None, regex=None):
+                 not_words=None, regex=None,
+                 match_case=False, whole_word=False):
 
     results = []
 
@@ -178,7 +207,9 @@ def search_notes(search_paths, ext=None, exclude=None,
                     all_words=all_words,
                     any_words=any_words,
                     not_words=not_words,
-                    regex=regex
+                    regex=regex,
+                    match_case=match_case,
+                    whole_word=whole_word
                 ):
                     results.append(note)
 
