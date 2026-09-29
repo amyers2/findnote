@@ -1,6 +1,6 @@
 # findnote
 
-Script to help me find a note.
+Script and server to help me find a note.
 
 ## todo
 - [ ] Add editor of choice in config file
